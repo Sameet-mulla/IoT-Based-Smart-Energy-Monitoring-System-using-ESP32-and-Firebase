@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Smart Energy Monitor</title>
+
+<!-- Firebase -->
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- Chart -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0A1628;color:#fff;min-height:100vh}
+
+/* ALERT */
+#alertBar{display:none;background:#C62828;color:#fff;text-align:center;
+  padding:10px;font-weight:700;font-size:.95rem}
+
+/* HEADER */
+header{background:#0D1F33;border-bottom:3px solid #02C39A;
+  padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header h1{font-size:1.2rem;font-weight:700}
+header h1 span{color:#02C39A}
+header p{font-size:.75rem;color:#7A9BAA;margin-top:2px}
+.pill{background:#091520;border:1px solid #028090;border-radius:20px;
+  padding:5px 14px;font-size:.8rem;display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:#444;animation:pulse 1.5s infinite}
+.dot.on{background:#02C39A}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+main{padding:16px 20px;max-width:1200px;margin:0 auto}
+
+/* METRIC CARDS */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.card{background:#0D2137;border-radius:10px;padding:14px;border-left:4px solid #028090}
+.card .lbl{font-size:.68rem;color:#7A9BAA;text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px}
+.card .val{font-size:1.7rem;font-weight:700}
+.card .unit{font-size:.75rem;color:#7A9BAA;margin-top:3px}
+#cV{color:#64B5F6} #cI{color:#FFB74D} #cP{color:#02C39A} #cE{color:#CE93D8} #cC{color:#81C784}
+
+/* CHARTS */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+@media(max-width:700px){.charts{grid-template-columns:1fr}}
+.chartbox{background:#0D2137;border-radius:10px;padding:16px;border-top:2px solid #028090}
+.chartbox h3{font-size:.78rem;color:#7A9BAA;text-transform:uppercase;margin-bottom:10px}
+.chartbox canvas{max-height:200px}
+
+/* BULB CONTROLS */
+.bulb-section{background:#0D2137;border-radius:10px;padding:16px;
+  border-top:2px solid #FF6B35;margin-bottom:16px}
+.bulb-section h2{font-size:.82rem;color:#7A9BAA;text-transform:uppercase;
+  letter-spacing:.7px;margin-bottom:14px}
+.bulb-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.bulb-grid{grid-template-columns:1fr}}
+
+.bcard{background:#091520;border-radius:10px;padding:14px;
+  border:2px solid #1C3A5A;transition:all .3s}
+.bcard.active{border-color:#02C39A;background:#091F15}
+.btop{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bname{font-size:1rem;font-weight:700}
+.bstat{font-size:.75rem;padding:3px 10px;border-radius:10px;font-weight:600}
+.bstat.on{background:rgba(2,195,154,.15);color:#02C39A}
+.bstat.off{background:rgba(255,255,255,.07);color:#7A9BAA}
+.bulb-emoji{font-size:2rem;transition:filter .3s}
+.bcard.active .bulb-emoji{filter:drop-shadow(0 0 12px gold)}
+
+/* Toggle */
+.tog{position:relative;width:54px;height:26px;cursor:pointer;display:inline-block}
+.tog input{opacity:0;width:0;height:0}
+.sl{position:absolute;inset:0;background:#333;border-radius:26px;transition:.3s}
+.sl::before{content:'';position:absolute;width:18px;height:18px;
+  left:4px;bottom:4px;background:#fff;border-radius:50%;transition:.3s}
+.tog input:checked+.sl{background:#02C39A}
+.tog input:checked+.sl::before{transform:translateX(28px)}
+.gpio-label{font-size:.72rem;color:#7A9BAA;margin-top:8px}
+
+/* THRESHOLD */
+.thresh{background:#0D2137;border-radius:10px;padding:16px;
+  border-top:2px solid #1976D2;margin-bottom:16px}
+.thresh h2{font-size:.82rem;color:#7A9BAA;text-transform:uppercase;margin-bottom:10px}
+.trow{display:flex;gap:8px}
+.trow input{flex:1;background:rgba(255,255,255,.07);border:1px solid #028090;
+  border-radius:8px;color:#fff;padding:8px 12px;font-size:.9rem;outline:none}
+.trow input:focus{border-color:#02C39A}
+.setbtn{background:#028090;color:#fff;border:none;border-radius:8px;
+  padding:8px 16px;cursor:pointer;font-weight:700;transition:background .2s}
+.setbtn:hover{background:#02C39A}
+
+/* PREDICTION */
+.pred{background:#0D2137;border-radius:10px;padding:16px;
+  border-top:2px solid #AB47BC;margin-bottom:16px}
+.pred h2{font-size:.82rem;color:#7A9BAA;text-transform:uppercase;margin-bottom:10px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.pitem{background:#091520;border-radius:8px;padding:12px;text-align:center}
+.pval{font-size:1.4rem;font-weight:700;color:#CE93D8}
+.plbl{font-size:.7rem;color:#7A9BAA;margin-top:3px}
+
+/* HISTORY */
+.hist{background:#0D2137;border-radius:10px;padding:16px;
+  border-top:2px solid #1565C0;margin-bottom:16px;overflow-x:auto}
+.hist h2{font-size:.82rem;color:#7A9BAA;text-transform:uppercase;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{text-align:left;padding:7px 10px;color:#02C39A;
+  border-bottom:1px solid rgba(255,255,255,.08);font-size:.72rem;text-transform:uppercase}
+td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:#C8E6F5}
+
+footer{text-align:center;color:#7A9BAA;font-size:.7rem;padding:12px}
+</style>
+
+</head>
+<body>
+
+<div id="alertBar">⚠️ ALERT: Power exceeded limit! Check appliances.</div>
+
+<header>
+  <div>
+    <h1>⚡ Smart <span>Energy Monitor</span></h1>
+    <p>SDMCET Dharwad &nbsp;|&nbsp; 22UECL605 &nbsp;|&nbsp; ESP32 + Firebase</p>
+  </div>
+  <div class="pill">
+    <span class="dot" id="dot"></span>
+    <span id="statusTxt">Connecting…</span>
+    &nbsp;|&nbsp;
+    <span id="lastUpd">—</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Metric Cards -->
+
+  <div class="cards">
+    <div class="card" style="border-color:#1976D2">
+      <div class="lbl">Voltage</div><div class="val" id="cV">—</div><div class="unit">Volts (V)</div>
+    </div>
+    <div class="card" style="border-color:#FF6B35">
+      <div class="lbl">Current</div><div class="val" id="cI">—</div><div class="unit">Amperes (A)</div>
+    </div>
+    <div class="card" style="border-color:#02C39A">
+      <div class="lbl">Power</div><div class="val" id="cP">—</div><div class="unit">Watts (W)</div>
+    </div>
+    <div class="card" style="border-color:#AB47BC">
+      <div class="lbl">Energy Used</div><div class="val" id="cE">—</div><div class="unit">kWh</div>
+    </div>
+    <div class="card" style="border-color:#43A047">
+      <div class="lbl">Est. Cost</div><div class="val" id="cC">—</div><div class="unit">Rupees ₹</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+
+  <div class="charts">
+    <div class="chartbox">
+      <h3>📈 Power vs Time (W)</h3>
+      <canvas id="chartP"></canvas>
+    </div>
+    <div class="chartbox">
+      <h3>📊 Daily Energy (kWh)</h3>
+      <canvas id="chartE"></canvas>
+    </div>
+  </div>
+
+  <!-- Bulb Controls -->
+
+  <div class="bulb-section">
+    <h2>💡 Bulb Control — Toggle ON / OFF</h2>
+    <div class="bulb-grid">
+
+```
+  <div class="bcard" id="bc1">
+    <div class="btop">
+      <div>
+        <div class="bname">Bulb 1</div>
+        <div class="bstat off" id="bs1">OFF</div>
+      </div>
+      <div class="bulb-emoji" id="be1">💡</div>
+    </div>
+    <label class="tog">
+      <input type="checkbox" id="t1" onchange="toggleBulb(1,this.checked)"/>
+      <span class="sl"></span>
+    </label>
+    <div class="gpio-label">Relay 1 → GPIO 26</div>
+  </div>
+
+  <div class="bcard" id="bc2">
+    <div class="btop">
+      <div>
+        <div class="bname">Bulb 2</div>
+        <div class="bstat off" id="bs2">OFF</div>
+      </div>
+      <div class="bulb-emoji" id="be2">💡</div>
+    </div>
+    <label class="tog">
+      <input type="checkbox" id="t2" onchange="toggleBulb(2,this.checked)"/>
+      <span class="sl"></span>
+    </label>
+    <div class="gpio-label">Relay 2 → GPIO 27</div>
+  </div>
+
+</div>
+```
+
+  </div>
+
+  <!-- Threshold -->
+
+  <div class="thresh">
+    <h2>⚡ Power Alert Threshold</h2>
+    <div class="trow">
+      <input type="number" id="limVal" value="500" min="1"/>
+      <span style="color:#7A9BAA;font-size:.85rem;white-space:nowrap">Watts</span>
+      <button class="setbtn" onclick="setLimit()">Set Limit</button>
+    </div>
+  </div>
+
+  <!-- Prediction -->
+
+  <div class="pred">
+    <h2>🤖 Monthly Prediction</h2>
+    <div class="pgrid">
+      <div class="pitem"><div class="pval" id="pKwh">—</div><div class="plbl">kWh / month</div></div>
+      <div class="pitem"><div class="pval" id="pBill">—</div><div class="plbl">Bill (₹)</div></div>
+      <div class="pitem"><div class="pval" id="pAvg">—</div><div class="plbl">Avg Power (W)</div></div>
+      <div class="pitem"><div class="pval" id="pPeak">—</div><div class="plbl">Peak Power (W)</div></div>
+    </div>
+  </div>
+
+  <!-- History -->
+
+  <div class="hist">
+    <h2>📋 Recent Readings</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Voltage</th><th>Current</th><th>Power</th></tr></thead>
+      <tbody id="htbody">
+        <tr><td colspan="4" style="color:#7A9BAA;text-align:center">Waiting for data…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<footer>
+  Smart Energy Monitoring System | 22UECL605 | SDMCET Dharwad<br/>
+  Sameet Mulla · Ranjeet Ulligeri · Mahalingayya Sali · Arjun Gulappanavar
+</footer>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  PASTE YOUR FIREBASE CONFIG HERE
+//  Go to: Firebase Console → Project Settings
+//  → Your Apps → Click Config radio button → Copy
+// ══════════════════════════════════════════════════════
+const firebaseConfig = {
+ apiKey: "AIzaSyB8Z2r0NAbGw_xUbnQ83Pt2CRW7sD0VhOQ",
+    authDomain: "smart-energy-monitor-842e9.firebaseapp.com",
+    databaseURL: "https://smart-energy-monitor-842e9-default-rtdb.firebaseio.com",
+    projectId: "smart-energy-monitor-842e9",
+    storageBucket: "smart-energy-monitor-842e9.firebasestorage.app",
+    messagingSenderId: "252817464715",
+    appId: "1:252817464715:web:76f52dc23b5820862ee38e"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ── Charts ────────────────────────────────────────────
+const pLabels=[], pData=[], allP=[];
+
+const chartP = new Chart(document.getElementById('chartP'), {
+  type:'line',
+  data:{labels:pLabels,datasets:[{
+    data:pData, borderColor:'#02C39A',
+    backgroundColor:'rgba(2,195,154,0.08)',
+    borderWidth:2.5, pointRadius:3,
+    pointBackgroundColor:'#02C39A', tension:0.3, fill:true
+  }]},
+  options:{responsive:true,animation:{duration:300},
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{ticks:{color:'#7A9BAA',font:{size:9}},grid:{color:'rgba(255,255,255,0.05)'}},
+      y:{ticks:{color:'#7A9BAA',font:{size:9}},grid:{color:'rgba(255,255,255,0.07)'},min:0}
+    }}
+});
+
+new Chart(document.getElementById('chartE'), {
+  type:'bar',
+  data:{
+    labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    datasets:[{data:[0.4,0.6,0.5,0.8,0.7,0.9,0.5],
+      backgroundColor:['#028090','#02C39A','#065A82','#AB47BC','#FF6B35','#028090','#02C39A'],
+      borderRadius:5}]
+  },
+  options:{responsive:true,plugins:{legend:{display:false}},
+    scales:{
+      x:{ticks:{color:'#7A9BAA',font:{size:9}},grid:{display:false}},
+      y:{ticks:{color:'#7A9BAA',font:{size:9}},grid:{color:'rgba(255,255,255,0.07)'},min:0}
+    }}
+});
+
+// ── Live Data Listener ────────────────────────────────
+// NOTE: paths match exactly with ESP32 code (/sensor/...)
+db.ref('/sensor').on('value', snap => {
+  const d = snap.val();
+  if (!d) return;
+
+  // Update cards
+  document.getElementById('cV').textContent = (d.voltage??0).toFixed(1);
+  document.getElementById('cI').textContent = (d.current??0).toFixed(2);
+  document.getElementById('cP').textContent = (d.power??0).toFixed(1);
+  document.getElementById('cE').textContent = (d.energy??0).toFixed(4);
+  document.getElementById('cC').textContent = '₹'+(d.cost??0).toFixed(2);
+
+  // Sync bulb UI from ESP32 state
+  setBulbUI(1, d.b1??false);
+  setBulbUI(2, d.b2??false);
+
+  // Chart
+  const t = new Date().toLocaleTimeString();
+  pLabels.push(t); pData.push(+(d.power??0).toFixed(1));
+  allP.push(d.power??0);
+  if(pLabels.length>20){pLabels.shift();pData.shift();}
+  chartP.update();
+
+  // Prediction
+  if(allP.length>0){
+    const avg  = allP.reduce((a,b)=>a+b,0)/allP.length;
+    const peak = Math.max(...allP);
+    const kwh  = (avg/1000)*24*30;
+    document.getElementById('pKwh') .textContent = kwh.toFixed(2);
+    document.getElementById('pBill').textContent = '₹'+(kwh*7.5).toFixed(0);
+    document.getElementById('pAvg') .textContent = avg.toFixed(1)+'W';
+    document.getElementById('pPeak').textContent = peak.toFixed(1)+'W';
+  }
+
+  // Status
+  document.getElementById('dot').classList.add('on');
+  document.getElementById('statusTxt').textContent = 'Live';
+  document.getElementById('lastUpd').textContent   = 'Updated '+new Date().toLocaleTimeString();
+});
+
+// ── Alert ─────────────────────────────────────────────
+db.ref('/alert/on').on('value', s => {
+  document.getElementById('alertBar').style.display = s.val() ? 'block':'none';
+});
+
+// ── History ───────────────────────────────────────────
+db.ref('/history').limitToLast(8).on('value', snap => {
+  const rows=[]; snap.forEach(c=>{
+    const v=c.val();
+    rows.unshift({t:c.key,v:(v.v??0).toFixed(1),i:(v.i??0).toFixed(2),p:(v.p??0).toFixed(1)});
+  });
+  const tb=document.getElementById('htbody');
+  if(!rows.length) return;
+  tb.innerHTML=rows.map(r=>`<tr><td>${r.t}s</td><td>${r.v}V</td><td>${r.i}A</td><td>${r.p}W</td></tr>`).join('');
+});
+
+// ── Upload history ────────────────────────────────────
+db.ref('/sensor').on('value', snap=>{
+  const d=snap.val(); if(!d||!d.time) return;
+  db.ref('/history/'+d.time).set({v:d.voltage,i:d.current,p:d.power});
+});
+
+// ── Bulb UI ───────────────────────────────────────────
+function setBulbUI(n, on) {
+  document.getElementById('bc'+n).className = 'bcard'+(on?' active':'');
+  const st=document.getElementById('bs'+n);
+  st.textContent=on?'ON':'OFF';
+  st.className='bstat '+(on?'on':'off');
+  document.getElementById('t'+n).checked=on;
+  document.getElementById('be'+n).style.filter=on?'drop-shadow(0 0 14px gold)':'none';
+}
+
+// ── Toggle Bulb ───────────────────────────────────────
+// NOTE: writes to /bulb/b1 and /bulb/b2 — matches ESP32
+function toggleBulb(n, state) {
+  db.ref('/bulb/b'+n).set(state)
+    .then(()=>{
+      console.log('Bulb '+n+' set to '+state);
+      setBulbUI(n, state); // instant UI update
+    })
+    .catch(e=>{ alert('Error: '+e.message); console.error(e); });
+}
+
+// ── Set Power Limit ───────────────────────────────────
+function setLimit() {
+  const v = parseFloat(document.getElementById('limVal').value);
+  if(isNaN(v)||v<=0){ alert('Enter valid watts value'); return; }
+  db.ref('/set/limit').set(v)
+    .then(()=>alert('Limit set: '+v+' W ✅'))
+    .catch(e=>console.error(e));
+}
+</script>
+
+</body>
+</html>
